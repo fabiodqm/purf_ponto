@@ -18,7 +18,8 @@ http.createServer((req, res) => {
 const {
     Client,
     GatewayIntentBits,
-    EmbedBuilder
+    EmbedBuilder,
+    MessageFlags
 } = require('discord.js');
 
 // ====== CONFIGURAÇÃO / MARCA ======
@@ -89,12 +90,45 @@ client.on('interactionCreate', async interaction => {
     const userId = interaction.user.id;
     const data = loadData();
 
-    // ---------- /ponto (toggle: inicia ou finaliza) ----------
+    // ---------- /ponto iniciar | finalizar ----------
     if (interaction.commandName === 'ponto') {
-        const registro = data[userId];
+        const subcommand = interaction.options.getSubcommand();
 
-        // Se tem um ponto em aberto → finaliza
-        if (registro && registro.end === null) {
+        if (subcommand === 'iniciar') {
+            const registro = data[userId];
+
+            if (registro && registro.end === null) {
+                return interaction.reply({
+                    content: '⚠️ Você já tem um ponto em aberto. Use `/ponto finalizar` para encerrá-lo.',
+                    flags: MessageFlags.Ephemeral
+                });
+            }
+
+            data[userId] = { start: Date.now(), end: null };
+            saveData(data);
+
+            const embed = new EmbedBuilder()
+                .setTitle('📁 Bate-Ponto')
+                .setDescription('Seu expediente foi iniciado com sucesso.')
+                .addFields(
+                    { name: 'Usuário', value: `<@${userId}>` },
+                    { name: 'Início', value: formatDateTime(data[userId].start) }
+                )
+                .setFooter({ text: BRAND_FOOTER });
+
+            return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+        }
+
+        if (subcommand === 'finalizar') {
+            const registro = data[userId];
+
+            if (!registro || registro.end !== null) {
+                return interaction.reply({
+                    content: '⚠️ Você não tem nenhum ponto em aberto. Use `/ponto iniciar` primeiro.',
+                    flags: MessageFlags.Ephemeral
+                });
+            }
+
             registro.end = Date.now();
             saveData(data);
 
@@ -111,23 +145,8 @@ client.on('interactionCreate', async interaction => {
                 )
                 .setFooter({ text: BRAND_FOOTER });
 
-            return interaction.reply({ embeds: [embed] });
+            return interaction.reply({ embeds: [embed] }); // público, igual ao print
         }
-
-        // Senão → inicia um novo ponto
-        data[userId] = { start: Date.now(), end: null };
-        saveData(data);
-
-        const embed = new EmbedBuilder()
-            .setTitle('📁 Bate-Ponto')
-            .setDescription('Seu expediente foi iniciado com sucesso.')
-            .addFields(
-                { name: 'Usuário', value: `<@${userId}>` },
-                { name: 'Início', value: formatDateTime(data[userId].start) }
-            )
-            .setFooter({ text: BRAND_FOOTER });
-
-        return interaction.reply({ embeds: [embed], ephemeral: true });
     }
 
     // ---------- /reabrir ----------
@@ -137,7 +156,7 @@ client.on('interactionCreate', async interaction => {
         if (!registro || registro.end === null) {
             return interaction.reply({
                 content: '⚠️ Você não tem nenhum ponto finalizado para reabrir.',
-                ephemeral: true
+                flags: MessageFlags.Ephemeral
             });
         }
 
