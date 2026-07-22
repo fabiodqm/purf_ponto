@@ -90,20 +90,13 @@ client.on('interactionCreate', async interaction => {
     const userId = interaction.user.id;
     const data = loadData();
 
-    // ---------- /ponto iniciar | finalizar ----------
+    // ---------- /ponto (inicia ou finaliza automaticamente) ----------
     if (interaction.commandName === 'ponto') {
-        const subcommand = interaction.options.getSubcommand();
+        const registro = data[userId];
+        const pontoAberto = registro && registro.end === null;
 
-        if (subcommand === 'iniciar') {
-            const registro = data[userId];
-
-            if (registro && registro.end === null) {
-                return interaction.reply({
-                    content: '⚠️ Você já tem um ponto em aberto. Use `/ponto finalizar` para encerrá-lo.',
-                    flags: MessageFlags.Ephemeral
-                });
-            }
-
+        if (!pontoAberto) {
+            // Nenhum ponto em aberto -> inicia
             data[userId] = { start: Date.now(), end: null };
             saveData(data);
 
@@ -117,18 +110,8 @@ client.on('interactionCreate', async interaction => {
                 .setFooter({ text: BRAND_FOOTER });
 
             return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
-        }
-
-        if (subcommand === 'finalizar') {
-            const registro = data[userId];
-
-            if (!registro || registro.end !== null) {
-                return interaction.reply({
-                    content: '⚠️ Você não tem nenhum ponto em aberto. Use `/ponto iniciar` primeiro.',
-                    flags: MessageFlags.Ephemeral
-                });
-            }
-
+        } else {
+            // Já tem ponto em aberto -> finaliza
             registro.end = Date.now();
             saveData(data);
 
