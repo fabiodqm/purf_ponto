@@ -61,6 +61,17 @@ function formatDateTime(timestamp) {
     return `${parts.day} de ${parts.month} de ${parts.year} ${parts.hour}:${parts.minute}`;
 }
 
+// Retorna a data (YYYY-MM-DD) no fuso America/Sao_Paulo, para comparar "mesmo dia"
+function getDayKey(timestamp) {
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        timeZone: 'America/Sao_Paulo'
+    });
+    return formatter.format(new Date(timestamp)); // ex: "2026-07-21"
+}
+
 function formatDuration(ms) {
     let totalSeconds = Math.max(0, Math.floor(ms / 1000));
     const hours = Math.floor(totalSeconds / 3600);
@@ -139,6 +150,16 @@ client.on('interactionCreate', async interaction => {
         if (!registro || registro.end === null) {
             return interaction.reply({
                 content: '⚠️ Você não tem nenhum ponto finalizado para reabrir.',
+                flags: MessageFlags.Ephemeral
+            });
+        }
+
+        // Regra da virada do dia: se o dia atual é diferente do dia em que o
+        // ponto foi finalizado, o REABRIR não fica mais disponível.
+        // O colaborador deve bater o /ponto novamente para iniciar um novo registro.
+        if (getDayKey(registro.end) !== getDayKey(Date.now())) {
+            return interaction.reply({
+                content: '⚠️ Esse ponto foi finalizado em outro dia e não pode mais ser reaberto. Use `/ponto` para iniciar um novo registro.',
                 flags: MessageFlags.Ephemeral
             });
         }
