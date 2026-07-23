@@ -14,16 +14,8 @@ const commands = [
             sub.setName('iniciar').setDescription('Inicia um novo ponto')
         )
         .addSubcommand(sub =>
-            sub.setName('pausar').setDescription('Pausa o ponto em aberto')
-        )
-        .addSubcommand(sub =>
             sub.setName('finalizar').setDescription('Finaliza o ponto em aberto')
         )
-        .toJSON(),
-
-    new SlashCommandBuilder()
-        .setName('reabrir')
-        .setDescription('Reabre seu último ponto pausado ou finalizado (se ainda for o mesmo dia)')
         .toJSON(),
 
     new SlashCommandBuilder()
@@ -42,7 +34,7 @@ const rest = new REST({ version: '10' })
 
 (async () => {
     try {
-        console.log('🔄 Registrando comandos /ponto, /reabrir e /historico...');
+        console.log('🔄 Registrando comandos /ponto e /historico...');
 
         await rest.put(
             Routes.applicationCommands(process.env.CLIENT_ID),

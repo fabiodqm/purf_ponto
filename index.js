@@ -163,6 +163,17 @@ function buildReabrirRow(userId, recordId, disabled = false) {
     return row;
 }
 
+function buildPausarRow(userId, recordId, disabled = false) {
+    const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`pausar_${userId}_${recordId}`)
+            .setLabel('PAUSAR')
+            .setStyle(ButtonStyle.Secondary)
+            .setDisabled(disabled)
+    );
+    return row;
+}
+
 // Reabre um registro pausado (volta) ou finalizado (reabre o dia, se ainda for o mesmo dia)
 // Retorna { ok: true, embed, row } ou { ok: false, motivo }
 function reabrirRegistro(record, userId) {
@@ -173,7 +184,7 @@ function reabrirRegistro(record, userId) {
 
         const embed = new EmbedBuilder()
             .setTitle('📁 Bate-Ponto')
-            .setDescription('Ponto retomado. Use `/ponto pausar` ou `/ponto finalizar` quando precisar.')
+            .setDescription('Ponto retomado. Use o botão PAUSAR ou `/ponto finalizar` quando precisar.')
             .addFields(
                 { name: 'Usuário', value: `<@${userId}>` },
                 { name: 'Início', value: formatDateTime(record.start) },
@@ -244,6 +255,54 @@ process.on('unhandledRejection', err => console.error('unhandledRejection:', err
 process.on('uncaughtException', err => console.error('uncaughtException:', err));
 
 async function handleInteraction(interaction) {
+    // ============ BOTÃO "PAUSAR" ============
+    if (interaction.isButton() && interaction.customId.startsWith('pausar_')) {
+        const [, donoId, recordId] = interaction.customId.split('_');
+
+        if (interaction.user.id !== donoId) {
+            return interaction.reply({
+                content: '⚠️ Somente quem bateu esse ponto pode pausá-lo.',
+                flags: MessageFlags.Ephemeral
+            });
+        }
+
+        const data = loadData();
+        const records = getUserRecords(data, donoId);
+        const record = records.find(r => String(r.id) === recordId);
+
+        if (!record) {
+            return interaction.reply({
+                content: '⚠️ Registro não encontrado.',
+                flags: MessageFlags.Ephemeral
+            });
+        }
+
+        if (record.status !== 'aberto') {
+            return interaction.reply({
+                content: `⚠️ Esse ponto não está aberto no momento (status: ${record.status}).`,
+                flags: MessageFlags.Ephemeral
+            });
+        }
+
+        const now = Date.now();
+        record.pausas.push({ pausa: now, volta: null });
+        record.status = 'pausado';
+        saveData(data);
+
+        const embed = new EmbedBuilder()
+            .setTitle('📁 Bate-Ponto')
+            .setDescription('Use o botão REABRIR para abrir esse ponto novamente')
+            .addFields(
+                { name: 'Usuário', value: `<@${donoId}>` },
+                { name: 'Início', value: formatDateTime(record.start) },
+                { name: 'Pausa', value: formatDateTime(now) }
+            )
+            .setFooter({ text: BRAND_FOOTER });
+
+        await interaction.update({ embeds: [embed], components: [buildReabrirRow(donoId, recordId)] });
+        return;
+    }
+
     // ============ BOTÃO "REABRIR" ============
     if (interaction.isButton() && interaction.customId.startsWith('reabrir_')) {
         const [, donoId, recordId] = interaction.customId.split('_');
@@ -282,7 +341,7 @@ async function handleInteraction(interaction) {
 
         saveData(data);
 
-        await interaction.update({ embeds: [resultado.embed], components: [] });
+        await interaction.update({ embeds: [resultado.embed], components: [buildPausarRow(donoId, recordId)] });
         return;
     }
 
@@ -298,7 +357,7 @@ async function handleInteraction(interaction) {
 
         if (!sub) {
             return interaction.reply({
-                content: '⚠️ Esse comando mudou. Use `/ponto iniciar`, `/ponto pausar` ou `/ponto finalizar`.\n(Se o Discord ainda mostrar o `/ponto` antigo, aguarde alguns minutos ou saia e entre no servidor novamente — os comandos foram atualizados.)',
+                content: '⚠️ Esse comando mudou. Use `/ponto iniciar` ou `/ponto finalizar` (a pausa agora é feita pelo botão PAUSAR no card).\n(Se o Discord ainda mostrar o `/ponto` antigo, aguarde alguns minutos ou saia e entre no servidor novamente — os comandos foram atualizados.)',
                 flags: MessageFlags.Ephemeral
             });
         }
@@ -308,7 +367,7 @@ async function handleInteraction(interaction) {
         if (sub === 'iniciar') {
             if (ativo) {
                 return interaction.reply({
-                    content: `⚠️ Você já tem um ponto ${ativo.status} em aberto. Use \`/ponto pausar\` ou \`/ponto finalizar\` antes de iniciar outro.`,
+                    content: `⚠️ Você já tem um ponto ${ativo.status} em aberto. Use o botão PAUSAR/REABRIR ou \`/ponto finalizar\` antes de iniciar outro.`,
                     flags: MessageFlags.Ephemeral
                 });
             }
@@ -334,39 +393,7 @@ async function handleInteraction(interaction) {
                 )
                 .setFooter({ text: BRAND_FOOTER });
 
-            return interaction.reply({ embeds: [embed] });
-        }
-
-        if (sub === 'pausar') {
-            if (!ativo) {
-                return interaction.reply({
-                    content: '⚠️ Você não tem nenhum ponto aberto. Use `/ponto iniciar` primeiro.',
-                    flags: MessageFlags.Ephemeral
-                });
-            }
-            if (ativo.status === 'pausado') {
-                return interaction.reply({
-                    content: '⚠️ Seu ponto já está pausado. Use o botão REABRIR para retomar.',
-                    flags: MessageFlags.Ephemeral
-                });
-            }
-
-            const now = Date.now();
-            ativo.pausas.push({ pausa: now, volta: null });
-            ativo.status = 'pausado';
-            saveData(data);
-
-            const embed = new EmbedBuilder()
-                .setTitle('📁 Bate-Ponto')
-                .setDescription('Use o comando `/reabrir` para abrir esse ponto novamente')
-                .addFields(
-                    { name: 'Usuário', value: `<@${userId}>` },
-                    { name: 'Início', value: formatDateTime(ativo.start) },
-                    { name: 'Pausa', value: formatDateTime(now) }
-                )
-                .setFooter({ text: BRAND_FOOTER });
-
-            return interaction.reply({ embeds: [embed], components: [buildReabrirRow(userId, ativo.id)] });
+            return interaction.reply({ embeds: [embed], components: [buildPausarRow(userId, novoRegistro.id)] });
         }
 
         if (sub === 'finalizar') {
@@ -411,33 +438,12 @@ async function handleInteraction(interaction) {
 
             const embed = new EmbedBuilder()
                 .setTitle('📁 Bate-Ponto')
-                .setDescription('Use o comando `/reabrir` para abrir esse ponto novamente')
+                .setDescription('Use o botão REABRIR para abrir esse ponto novamente')
                 .addFields(...fields)
                 .setFooter({ text: BRAND_FOOTER });
 
             return interaction.reply({ embeds: [embed], components: [buildReabrirRow(userId, ativo.id)] });
         }
-    }
-
-    // ---------- /reabrir (versão em comando, além do botão) ----------
-    if (interaction.commandName === 'reabrir') {
-        const registro = [...records].reverse().find(r => r.status !== 'aberto');
-
-        if (!registro) {
-            return interaction.reply({
-                content: '⚠️ Você não tem nenhum ponto pausado ou finalizado para reabrir.',
-                flags: MessageFlags.Ephemeral
-            });
-        }
-
-        const resultado = reabrirRegistro(registro, userId);
-
-        if (!resultado.ok) {
-            return interaction.reply({ content: resultado.motivo, flags: MessageFlags.Ephemeral });
-        }
-
-        saveData(data);
-        return interaction.reply({ embeds: [resultado.embed] });
     }
 
     // ---------- /historico ----------
