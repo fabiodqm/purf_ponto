@@ -9,12 +9,31 @@ const {
 const commands = [
     new SlashCommandBuilder()
         .setName('ponto')
-        .setDescription('Bate seu ponto (inicia ou finaliza automaticamente)')
+        .setDescription('Gerencia seu ponto (bate-ponto)')
+        .addSubcommand(sub =>
+            sub.setName('iniciar').setDescription('Inicia um novo ponto')
+        )
+        .addSubcommand(sub =>
+            sub.setName('pausar').setDescription('Pausa o ponto em aberto')
+        )
+        .addSubcommand(sub =>
+            sub.setName('finalizar').setDescription('Finaliza o ponto em aberto')
+        )
         .toJSON(),
 
     new SlashCommandBuilder()
         .setName('reabrir')
-        .setDescription('Reabre seu último ponto finalizado')
+        .setDescription('Reabre seu último ponto pausado ou finalizado (se ainda for o mesmo dia)')
+        .toJSON(),
+
+    new SlashCommandBuilder()
+        .setName('historico')
+        .setDescription('Mostra o histórico de pontos')
+        .addUserOption(opt =>
+            opt.setName('usuario')
+                .setDescription('Usuário para consultar (requer permissão)')
+                .setRequired(false)
+        )
         .toJSON()
 ];
 
@@ -23,7 +42,7 @@ const rest = new REST({ version: '10' })
 
 (async () => {
     try {
-        console.log('🔄 Registrando comandos /ponto e /reabrir...');
+        console.log('🔄 Registrando comandos /ponto, /reabrir e /historico...');
 
         await rest.put(
             Routes.applicationCommands(process.env.CLIENT_ID),
