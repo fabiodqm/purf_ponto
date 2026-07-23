@@ -9,13 +9,7 @@ const {
 const commands = [
     new SlashCommandBuilder()
         .setName('ponto')
-        .setDescription('Gerencia seu ponto (bate-ponto)')
-        .addSubcommand(sub =>
-            sub.setName('iniciar').setDescription('Inicia um novo ponto')
-        )
-        .addSubcommand(sub =>
-            sub.setName('finalizar').setDescription('Finaliza o ponto em aberto')
-        )
+        .setDescription('Alterna seu ponto: inicia se não tiver nada aberto, ou finaliza se já tiver')
         .toJSON(),
 
     new SlashCommandBuilder()

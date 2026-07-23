@@ -351,27 +351,12 @@ async function handleInteraction(interaction) {
     const data = loadData();
     const records = getUserRecords(data, userId);
 
-    // ---------- /ponto iniciar | pausar | finalizar ----------
+    // ---------- /ponto (comando único de alternância) ----------
     if (interaction.commandName === 'ponto') {
-        const sub = interaction.options.getSubcommand(false);
-
-        if (!sub) {
-            return interaction.reply({
-                content: '⚠️ Esse comando mudou. Use `/ponto iniciar` ou `/ponto finalizar` (a pausa agora é feita pelo botão PAUSAR no card).\n(Se o Discord ainda mostrar o `/ponto` antigo, aguarde alguns minutos ou saia e entre no servidor novamente — os comandos foram atualizados.)',
-                flags: MessageFlags.Ephemeral
-            });
-        }
-
         const ativo = getActiveRecord(records);
 
-        if (sub === 'iniciar') {
-            if (ativo) {
-                return interaction.reply({
-                    content: `⚠️ Você já tem um ponto ${ativo.status} em aberto. Use o botão PAUSAR/REABRIR ou \`/ponto finalizar\` antes de iniciar outro.`,
-                    flags: MessageFlags.Ephemeral
-                });
-            }
-
+        // Se NÃO houver registro ativo → INICIAR
+        if (!ativo) {
             const now = Date.now();
             const novoRegistro = {
                 id: `${userId}-${now}`,
@@ -396,54 +381,46 @@ async function handleInteraction(interaction) {
             return interaction.reply({ embeds: [embed], components: [buildPausarRow(userId, novoRegistro.id)] });
         }
 
-        if (sub === 'finalizar') {
-            if (!ativo) {
-                return interaction.reply({
-                    content: '⚠️ Você não tem nenhum ponto aberto para finalizar.',
-                    flags: MessageFlags.Ephemeral
-                });
-            }
+        // Se houver registro ativo → FINALIZAR
+        const now = Date.now();
 
-            const now = Date.now();
-
-            // Se estava pausado, fecha a última pausa no momento da finalização
-            if (ativo.status === 'pausado') {
-                const ultimaPausa = ativo.pausas[ativo.pausas.length - 1];
-                if (ultimaPausa && ultimaPausa.volta === null) ultimaPausa.volta = now;
-            }
-
-            ativo.end = now;
-            ativo.status = 'finalizado';
-            saveData(data);
-
-            const totalMs = (ativo.end - ativo.start) - getPausedMs(ativo, ativo.end);
-
-            const fields = [
-                { name: 'Usuário', value: `<@${userId}>` },
-                { name: 'Início', value: formatDateTime(ativo.start) }
-            ];
-
-            if (ativo.pausas.length > 0) {
-                const ultimaPausa = ativo.pausas[ativo.pausas.length - 1];
-                fields.push({ name: 'Pausa', value: formatDateTime(ultimaPausa.pausa) });
-                if (ultimaPausa.volta) {
-                    fields.push({ name: 'Volta', value: formatDateTime(ultimaPausa.volta) });
-                }
-            }
-
-            fields.push(
-                { name: 'Término', value: formatDateTime(ativo.end) },
-                { name: 'Tempo total', value: formatDuration(totalMs) }
-            );
-
-            const embed = new EmbedBuilder()
-                .setTitle('📁 Bate-Ponto')
-                .setDescription('Use o botão REABRIR para abrir esse ponto novamente')
-                .addFields(...fields)
-                .setFooter({ text: BRAND_FOOTER });
-
-            return interaction.reply({ embeds: [embed], components: [buildReabrirRow(userId, ativo.id)] });
+        // Se estava pausado, fecha a última pausa no momento da finalização
+        if (ativo.status === 'pausado') {
+            const ultimaPausa = ativo.pausas[ativo.pausas.length - 1];
+            if (ultimaPausa && ultimaPausa.volta === null) ultimaPausa.volta = now;
         }
+
+        ativo.end = now;
+        ativo.status = 'finalizado';
+        saveData(data);
+
+        const totalMs = (ativo.end - ativo.start) - getPausedMs(ativo, ativo.end);
+
+        const fields = [
+            { name: 'Usuário', value: `<@${userId}>` },
+            { name: 'Início', value: formatDateTime(ativo.start) }
+        ];
+
+        if (ativo.pausas.length > 0) {
+            const ultimaPausa = ativo.pausas[ativo.pausas.length - 1];
+            fields.push({ name: 'Pausa', value: formatDateTime(ultimaPausa.pausa) });
+            if (ultimaPausa.volta) {
+                fields.push({ name: 'Volta', value: formatDateTime(ultimaPausa.volta) });
+            }
+        }
+
+        fields.push(
+            { name: 'Término', value: formatDateTime(ativo.end) },
+            { name: 'Tempo total', value: formatDuration(totalMs) }
+        );
+
+        const embed = new EmbedBuilder()
+            .setTitle('📁 Bate-Ponto')
+            .setDescription('Use o botão REABRIR para abrir esse ponto novamente')
+            .addFields(...fields)
+            .setFooter({ text: BRAND_FOOTER });
+
+        return interaction.reply({ embeds: [embed], components: [buildReabrirRow(userId, ativo.id)] });
     }
 
     // ---------- /historico ----------
