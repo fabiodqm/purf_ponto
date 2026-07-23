@@ -221,6 +221,29 @@ client.once('ready', () => {
 });
 
 client.on('interactionCreate', async interaction => {
+    try {
+        await handleInteraction(interaction);
+    } catch (error) {
+        console.error('Erro ao processar interação:', error);
+        try {
+            const payload = {
+                content: '⚠️ Ocorreu um erro ao processar esse comando. Tente novamente.',
+                flags: MessageFlags.Ephemeral
+            };
+            if (interaction.deferred || interaction.replied) {
+                await interaction.followUp(payload);
+            } else {
+                await interaction.reply(payload);
+            }
+        } catch (_) { /* interação pode já ter expirado, ignora */ }
+    }
+});
+
+// Também evita que qualquer erro não tratado derrube o processo no Render
+process.on('unhandledRejection', err => console.error('unhandledRejection:', err));
+process.on('uncaughtException', err => console.error('uncaughtException:', err));
+
+async function handleInteraction(interaction) {
     // ============ BOTÃO "REABRIR" ============
     if (interaction.isButton() && interaction.customId.startsWith('reabrir_')) {
         const [, donoId, recordId] = interaction.customId.split('_');
@@ -271,7 +294,15 @@ client.on('interactionCreate', async interaction => {
 
     // ---------- /ponto iniciar | pausar | finalizar ----------
     if (interaction.commandName === 'ponto') {
-        const sub = interaction.options.getSubcommand();
+        const sub = interaction.options.getSubcommand(false);
+
+        if (!sub) {
+            return interaction.reply({
+                content: '⚠️ Esse comando mudou. Use `/ponto iniciar`, `/ponto pausar` ou `/ponto finalizar`.\n(Se o Discord ainda mostrar o `/ponto` antigo, aguarde alguns minutos ou saia e entre no servidor novamente — os comandos foram atualizados.)',
+                flags: MessageFlags.Ephemeral
+            });
+        }
+
         const ativo = getActiveRecord(records);
 
         if (sub === 'iniciar') {
@@ -453,6 +484,6 @@ client.on('interactionCreate', async interaction => {
 
         return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
     }
-});
+}
 
 client.login(process.env.DISCORD_TOKEN);
